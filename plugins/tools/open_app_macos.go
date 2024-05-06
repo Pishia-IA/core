@@ -16,19 +16,31 @@ func NewOpenAppMacOS(config *config.Base) *OpenAppMacOS {
 	return &OpenAppMacOS{}
 }
 
-func (c *OpenAppMacOS) Run(params map[string]interface{}, userQuery string) (string, error) {
+func (c *OpenAppMacOS) Run(params map[string]interface{}, userQuery string) (*ToolResponse, error) {
 	log.Debugf("Running the OpenAppMacOS tool with the following parameters: %v", params)
-	exec.Command("open", "/Applications/"+params["app"].(string)).Run()
 
-	return "Opening APP...", nil
+	app := params["app"].(string)
+	arguments := ""
+
+	if params["app_arguments"] != nil {
+		arguments = params["app_arguments"].(string)
+	}
+
+	cmd := exec.Command("open", "-a", app, arguments)
+	err := cmd.Run()
+
+	if err != nil {
+		return nil, err
+	}
+	return &ToolResponse{
+		Success: true,
+		Type:    "string",
+		Data:    "The application has been opened.",
+	}, nil
 }
 
 func (c *OpenAppMacOS) Setup() error {
 	return nil
-}
-
-func (c *OpenAppMacOS) NeedConfirmation() bool {
-	return false
 }
 
 func (c *OpenAppMacOS) Description() string {
@@ -62,11 +74,17 @@ func (c *OpenAppMacOS) Parameters() map[string]*ToolParameter {
 			Required:    true,
 			Description: "The name of the app to open.",
 		},
+		"app_arguments": {
+			Type:        "string",
+			Format:      "",
+			Required:    false,
+			Description: "The arguments to pass to the app.",
+		},
 	}
 }
 
 func (c *OpenAppMacOS) UseCase() []string {
 	return []string{
-		"Open an application on macOS.",
+		"User ask explicitly to open an application.",
 	}
 }

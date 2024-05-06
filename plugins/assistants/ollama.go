@@ -42,11 +42,15 @@ func NewOllama(config *config.Base) *Ollama {
 
 // processToolCall processes the tool call.
 func (o *Ollama) processToolCall(toolCall string) (string, error) {
+	toolCall = strings.TrimSpace(toolCall)
+	toolCall = strings.ReplaceAll(toolCall, "<tool_call>", "")
+	toolCall = strings.ReplaceAll(toolCall, "</tool_call>", "")
+	toolCall = strings.TrimSpace(toolCall)
+
+	// Replace ' by " to avoid json unmarshal error
+	toolCall = strings.ReplaceAll(toolCall, "'", "\"")
+
 	log.Debugf("Processing tool call: %s", toolCall)
-	toolCall = strings.TrimSpace(toolCall)
-	toolCall = strings.TrimPrefix(toolCall, "<tool_call>")
-	toolCall = strings.TrimSuffix(toolCall, "</tool_call>")
-	toolCall = strings.TrimSpace(toolCall)
 
 	var toolCallJSON map[string]interface{}
 
@@ -80,7 +84,76 @@ func (o *Ollama) processToolCall(toolCall string) (string, error) {
 		return "", err
 	}
 
-	return toolResponse, nil
+	switch toolResponse.Type {
+	case "string":
+		return toolResponse.Data, nil
+	case "prompt":
+		prompts := toolResponse.Prompts
+
+		prompts = append(prompts, fmt.Sprintf("user query: %s. NOTE: Some answer could be in a different language that user query, please translate it.", userQuery))
+
+		log.Debugf("Tool prompts: %v", prompts)
+		result, err := o.SendRequestWithnoMemory(prompts)
+
+		if err != nil {
+			return "", err
+		}
+
+		return result, nil
+	}
+
+	return "", fmt.Errorf("unknown tool response type")
+}
+
+// SendRequestWithnoMemory is a method that allows the Ollama to chat with you without memory.
+func (o *Ollama) SendRequestWithnoMemory(input []string) (string, error) {
+	messages := []ollama.Message{}
+
+	inputsWithoutLast := input[:len(input)-1]
+	lastInput := input[len(input)-1]
+
+	if len(inputsWithoutLast) > 0 {
+		messages = append(messages, ollama.Message{
+			Role:    "system",
+			Content: fmt.Sprintf("Here some sources to help you: %s", strings.Join(inputsWithoutLast, "\n")),
+		})
+	}
+
+	messages = append(messages, ollama.Message{
+		Role:    "user",
+		Content: lastInput,
+	})
+
+	resp, err := o.Client.Chat(&ollama.ChatRequest{
+		Model:    o.Model,
+		Messages: messages,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	log.Debugf("Response: %s", resp.Message.Content)
+	return resp.Message.Content, nil
+}
+
+// SendRequestWithNoMemoryCustomModel is a method that allows the Ollama to chat with you without memory and with a custom model.
+func (o *Ollama) SendRequestWithNoMemoryCustomModel(input string, model string) (string, error) {
+	resp, err := o.Client.Chat(&ollama.ChatRequest{
+		Model: model,
+		Messages: []ollama.Message{
+			{
+				Role:    "user",
+				Content: input,
+			},
+		},
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Message.Content, nil
 }
 
 // SendRequest is a method that allows the Ollama to chat with you.
@@ -112,24 +185,11 @@ func (o *Ollama) SendRequest(input string) (string, error) {
 		}
 
 		o.Chat = append(o.Chat, ollama.Message{
-			Role:    "system",
+			Role:    "assistant",
 			Content: toolCall,
 		})
 
-		resp, err := o.Client.Chat(&ollama.ChatRequest{
-			Model:    o.Model,
-			Messages: o.Chat,
-		})
-
-		if err != nil {
-			o.Chat = o.Chat[:len(o.Chat)-1]
-			return "", err
-		}
-
-		o.Chat = append(o.Chat, resp.Message)
-
-		return resp.Message.Content, nil
-
+		return toolCall, nil
 	}
 
 	return resp.Message.Content, nil
@@ -165,26 +225,22 @@ func (o *Ollama) Setup() error {
 
 	o.Chat = append(o.Chat, ollama.Message{
 		Role: "system",
-		Content: strings.Trim(fmt.Sprintf(`
-		Current time: %s
-		Your name is PishIA.
-		You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools:
-		<tools>
-		%s
-		</tools>
-		Instructions:
-		- You only have to use a function, if use_case match with user query.
-		- Only tools defined in <tools></tools> XML tags are available for use, you musn't use any other tool.
-		- Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
-		<tool_call>
-		{"arguments": <args-dict>, "name": <function-name>}
-		</tool_call><|im_end|>
-`, current_time.Format("2006-01-02"), toolsJSON), "\n"),
-	})
-
-	o.Chat = append(o.Chat, ollama.Message{
-		Role:    "user",
-		Content: "Hello",
+		Content: strings.TrimSpace(fmt.Sprintf(`Today date: %s
+Knowledge cutoff: 2023-12-31
+Your name is PishIA.
+You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools:
+<tools>
+%s
+</tools>
+Instructions:
+- You only have to use a function, if use_case match with user query.
+- If you need more information for running a tool, ask the user for missing parameters.
+- Only tools defined in <tools></tools> XML tags are available for use, you musn't use any other tool.
+- Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
+<tool_call>
+{"arguments": <args-dict>, "name": <function-name>}
+</tool_call><|im_end|>
+`, current_time.Format("2006-01-02"), toolsJSON)),
 	})
 
 	return nil

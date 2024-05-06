@@ -19,9 +19,16 @@ type ToolParameter struct {
 	Required    bool   `json:"required"`
 }
 
+type ToolResponse struct {
+	Success bool     `json:"success"`
+	Type    string   `json:"type"`
+	Data    string   `json:"data"`
+	Prompts []string `json:"prompts,omitempty"`
+}
+
 type Tools interface {
 	// Run is a method that allows the tool to run.
-	Run(map[string]interface{}, string) (string, error)
+	Run(map[string]interface{}, string) (*ToolResponse, error)
 	// Setup sets up the tool, if something is needed before starting the tool.
 	Setup() error
 	// Description is a method that allows the tool to describe itself.
@@ -30,8 +37,6 @@ type Tools interface {
 	Parameters() map[string]*ToolParameter
 	// UseCase is a method that allows the tool to describe its use case.
 	UseCase() []string
-	// NeedConfirmation is a method that allows the tool to know if it needs confirmation.
-	NeedConfirmation() bool
 }
 
 // ToolRepository is a repository that contains all the tools.
@@ -109,11 +114,12 @@ func GetRepository() *ToolRepository {
 func StartTools(config *config.Base) {
 	repository = NewToolRepository()
 
-	repository.Register("weather", NewWeather(config))
+	// repository.Register("weather", NewWeather(config))
+	repository.Register("browser", NewBrowser(config))
 
 	switch runtime.GOOS {
 	case "darwin":
-		repository.Register("open_ap_macos", NewOpenAppMacOS(config))
+		repository.Register("open_app_macos", NewOpenAppMacOS(config))
 	}
 
 }
