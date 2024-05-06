@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"runtime"
 
 	"github.com/Pishia-IA/core/config"
 )
@@ -104,21 +105,15 @@ func GetRepository() *ToolRepository {
 	return repository
 }
 
-// isToolEnabled checks if the tool is enabled.
-func isToolEnabled(tool string, config *config.Base) bool {
-	for _, enabledTool := range config.Tool.Enabled {
-		if enabledTool == tool {
-			return true
-		}
-	}
-	return false
-}
-
 // StartTools starts the tools.
 func StartTools(config *config.Base) {
 	repository = NewToolRepository()
 
-	if isToolEnabled("weather", config) {
-		repository.Register("weather", NewWeather(config))
+	repository.Register("weather", NewWeather(config))
+
+	switch runtime.GOOS {
+	case "darwin":
+		repository.Register("open_ap_macos", NewOpenAppMacOS(config))
 	}
+
 }

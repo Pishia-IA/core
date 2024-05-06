@@ -107,6 +107,7 @@ func (o *Ollama) SendRequest(input string) (string, error) {
 		toolCall, err := o.processToolCall(resp.Message.Content)
 
 		if err != nil {
+			o.Chat = o.Chat[:len(o.Chat)-1]
 			return "", err
 		}
 
@@ -121,6 +122,7 @@ func (o *Ollama) SendRequest(input string) (string, error) {
 		})
 
 		if err != nil {
+			o.Chat = o.Chat[:len(o.Chat)-1]
 			return "", err
 		}
 
@@ -178,6 +180,11 @@ func (o *Ollama) Setup() error {
 		{"arguments": <args-dict>, "name": <function-name>}
 		</tool_call><|im_end|>
 `, current_time.Format("2006-01-02"), toolsJSON), "\n"),
+	})
+
+	o.Chat = append(o.Chat, ollama.Message{
+		Role:    "user",
+		Content: "Hello",
 	})
 
 	return nil

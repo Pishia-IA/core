@@ -53,9 +53,7 @@ func CreateDefaultConfig() error {
 				Endpoint: "http://localhost:11434",
 			},
 		},
-		Tool: Tool{
-			Enabled: []string{"weather", "cmd"},
-		},
+		Tool: Tool{},
 	}
 
 	// Create the configuration directory
