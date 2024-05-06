@@ -72,7 +72,8 @@ func (o *Ollama) processToolCall(toolCall string) (string, error) {
 		return "", fmt.Errorf("tool not found")
 	}
 
-	toolResponse, err := tool.Run(toolArguments)
+	userQuery := o.Chat[len(o.Chat)-2].Content
+	toolResponse, err := tool.Run(toolArguments, userQuery)
 
 	if err != nil {
 		return "", err

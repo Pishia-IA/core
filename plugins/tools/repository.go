@@ -20,7 +20,7 @@ type ToolParameter struct {
 
 type Tools interface {
 	// Run is a method that allows the tool to run.
-	Run(map[string]interface{}) (string, error)
+	Run(map[string]interface{}, string) (string, error)
 	// Setup sets up the tool, if something is needed before starting the tool.
 	Setup() error
 	// Description is a method that allows the tool to describe itself.
@@ -116,10 +116,6 @@ func isToolEnabled(tool string, config *config.Base) bool {
 // StartTools starts the tools.
 func StartTools(config *config.Base) {
 	repository = NewToolRepository()
-
-	if isToolEnabled("cmd", config) {
-		repository.Register("cmd", NewCmd(config))
-	}
 
 	if isToolEnabled("weather", config) {
 		repository.Register("weather", NewWeather(config))
