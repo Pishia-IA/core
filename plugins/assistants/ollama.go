@@ -42,6 +42,7 @@ func NewOllama(config *config.Base) *Ollama {
 
 // processToolCall processes the tool call.
 func (o *Ollama) processToolCall(toolCall string) (string, error) {
+	log.Debugf("Processing tool call: %s", toolCall)
 	toolCall = strings.TrimSpace(toolCall)
 	toolCall = strings.TrimPrefix(toolCall, "<tool_call>")
 	toolCall = strings.TrimSuffix(toolCall, "</tool_call>")
@@ -69,7 +70,7 @@ func (o *Ollama) processToolCall(toolCall string) (string, error) {
 	tool, ok := tools.GetRepository().Get(toolName)
 
 	if !ok {
-		return "", fmt.Errorf("tool not found")
+		return "", fmt.Errorf("tool %s not found", toolName)
 	}
 
 	userQuery := o.Chat[len(o.Chat)-2].Content
@@ -169,7 +170,10 @@ func (o *Ollama) Setup() error {
 		<tools>
 		%s
 		</tools>
-		Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
+		Instructions:
+		- You only have to use a function, if use_case match with user query.
+		- Only tools defined in <tools></tools> XML tags are available for use, you musn't use any other tool.
+		- Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
 		<tool_call>
 		{"arguments": <args-dict>, "name": <function-name>}
 		</tool_call><|im_end|>

@@ -61,6 +61,7 @@ func (r *ToolRepository) DumpToolsJSON() (string, error) {
 					"properties": make(map[string]map[string]string),
 					"required":   []string{},
 				},
+				"use_case": tool.UseCase(),
 			},
 		}
 

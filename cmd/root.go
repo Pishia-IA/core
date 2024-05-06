@@ -75,7 +75,7 @@ var cliCmd = &cobra.Command{
 
 			if err != nil {
 				cmd.Println("Error sending request:", err)
-				return
+				continue
 			}
 
 			cmd.Println("Ollama:", response)
