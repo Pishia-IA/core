@@ -14,8 +14,6 @@ type Assistant interface {
 	SendRequest(input string) (string, error)
 	// Setup sets up the assistant, if something is needed before starting the assistant.
 	Setup() error
-	// SendRequestWithnoMemory is a method that allows the assistant to chat with you without memory.
-	SendRequestWithnoMemory(input []string) (string, error)
 }
 
 // AssistantRepository is a repository that contains all the assistants.
@@ -60,6 +58,7 @@ func GetDefaultAssistant() Assistant {
 func StartAssistants(config *config.Base) {
 	repository = NewAssistantRepository()
 	repository.Register("ollama", NewOllama(config))
+	repository.Register("openai", NewOpenAI(config))
 
 	defaultAssistant = config.Assistants.Plugin
 }

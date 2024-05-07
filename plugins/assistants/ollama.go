@@ -90,7 +90,19 @@ func (o *Ollama) processToolCall(toolCall string) (string, error) {
 	case "prompt":
 		prompts := toolResponse.Prompts
 
-		prompts = append(prompts, fmt.Sprintf("user query: %s. NOTE: Some answer could be in a different language that user query, please translate it.", userQuery))
+		processedPrompts := []string{}
+
+		for _, prompt := range prompts {
+			result, err := o.SendRequestWithnoMemory([]string{fmt.Sprintf("user query: %s\n\n prompt: %s\n\n NOTE: Be concise, short and specific, some answer could be in a different language that user query, please translate it.", userQuery, prompt)})
+
+			if err != nil {
+				return "", err
+			}
+
+			processedPrompts = append(processedPrompts, result)
+		}
+
+		prompts = append(processedPrompts, fmt.Sprintf("user query: %s. NOTE: Be concise, short and specific, some answer could be in a different language that user query, please translate it.", userQuery))
 
 		log.Debugf("Tool prompts: %v", prompts)
 		result, err := o.SendRequestWithnoMemory(prompts)
@@ -114,7 +126,7 @@ func (o *Ollama) SendRequestWithnoMemory(input []string) (string, error) {
 
 	if len(inputsWithoutLast) > 0 {
 		messages = append(messages, ollama.Message{
-			Role:    "system",
+			Role:    "user",
 			Content: fmt.Sprintf("Here some sources to help you: %s", strings.Join(inputsWithoutLast, "\n")),
 		})
 	}
@@ -235,6 +247,7 @@ You are a function calling AI model. You are provided with function signatures w
 Instructions:
 - You only have to use a function, if use_case match with user query.
 - If you need more information for running a tool, ask the user for missing parameters.
+- If the user ask something using a relative date, use today date as reference.
 - Only tools defined in <tools></tools> XML tags are available for use, you musn't use any other tool.
 - Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
 <tool_call>

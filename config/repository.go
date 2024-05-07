@@ -52,6 +52,11 @@ func CreateDefaultConfig() error {
 				Model:    "adrienbrault/nous-hermes2pro:Q8_0",
 				Endpoint: "http://localhost:11434",
 			},
+			OpenAI: OpenAI{
+				Model:    "gpt-3.5-turbo",
+				APIKey:   "<api_key>",
+				Endpoint: "https://api.openai.com/v1/",
+			},
 		},
 		Tool: Tool{},
 	}

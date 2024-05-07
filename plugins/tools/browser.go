@@ -1,25 +1,29 @@
 package tools
 
 import (
-	"context"
 	"fmt"
+	"net/http"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Pishia-IA/core/config"
-	"github.com/chromedp/chromedp"
-	"github.com/chromedp/chromedp/device"
+
+	"github.com/gelembjuk/articletext"
+
 	"github.com/sap-nocops/duckduckgogo/client"
 )
 
 type Browser struct {
+	httpClient *http.Client
 }
 
 func NewBrowser(config *config.Base) *Browser {
-	return &Browser{}
+	return &Browser{
+		httpClient: &http.Client{},
+	}
 }
 
-const MAX_RESULTS_DUCK_DUCK_GO = 5
+const MAX_RESULTS_DUCK_DUCK_GO = 3
 
 func (c *Browser) Run(params map[string]interface{}, userQuery string) (*ToolResponse, error) {
 	var urlsToOpen []string
@@ -78,19 +82,21 @@ func (c *Browser) Run(params map[string]interface{}, userQuery string) (*ToolRes
 
 func (c *Browser) visitURL(url string) (string, error) {
 	log.Debugf("Visiting URL: %s", url)
-	ctx, cancel := chromedp.NewContext(context.Background())
-	defer cancel()
+	req, err := http.NewRequest("GET", url, nil)
 
-	var pageContent string
-	if err := chromedp.Run(ctx, chromedp.Tasks{
-		chromedp.Emulate(device.IPad),
-		chromedp.Navigate(url),
-		chromedp.Text("html", &pageContent),
-	}); err != nil {
+	if err != nil {
 		return "", err
 	}
 
-	return pageContent, nil
+	req.Header.Set("User-Agent", "Pishia-IA")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	return articletext.GetArticleText(resp.Body)
 }
 
 func (c *Browser) Setup() error {
@@ -122,6 +128,7 @@ func (c *Browser) UseCase() []string {
 		"User is asking about some term you are totally unfamiliar with (it might be new)",
 		"User explicitly asks you to browse or provide links to references",
 		"User is asking about an event that happened recently",
+		"User is asking about an event that is happening in the future",
 		"User send a URL and ask for a summary of the page",
 	}
 }
