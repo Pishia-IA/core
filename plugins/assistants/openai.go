@@ -82,19 +82,7 @@ func (o *OpenAI) processToolCall(toolCall string) (string, error) {
 	case "prompt":
 		prompts := toolResponse.Prompts
 
-		processedPrompts := []string{}
-
-		for _, prompt := range prompts {
-			result, err := o.SendRequestWithnoMemory([]string{fmt.Sprintf("user query: %s\n\n prompt: %s\n\n NOTE: Be concise, short and specific, some answer could be in a different language that user query, please translate it.", userQuery, prompt)})
-
-			if err != nil {
-				return "", err
-			}
-
-			processedPrompts = append(processedPrompts, result)
-		}
-
-		prompts = append(processedPrompts, fmt.Sprintf("user query: %s. NOTE: Be concise, short and specific, some answer could be in a different language that user query, please translate it.", userQuery))
+		prompts = append(prompts, fmt.Sprintf("user query: %s\n NOTE: Be concise, short and specific, some answer could be in a different language that user query, please translate it.", userQuery))
 
 		log.Debugf("Tool prompts: %v", prompts)
 		result, err := o.SendRequestWithnoMemory(prompts)
@@ -193,7 +181,7 @@ func (o *OpenAI) Setup() error {
 		%s
 		</tools>
 		Instructions:
-		- If you use a function, you only have to answer with the tool call,no extra information.
+		- If you use a function, you must only have to answer with the tool call,no extra information.
 		- You only have to use a function, if use_case match with user query.
 		- If you need more information for running a tool, ask the user for missing parameters.
 		- If the user ask something using a relative date, use today date as reference.
