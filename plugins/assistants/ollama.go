@@ -249,6 +249,7 @@ Instructions:
 - If you need more information for running a tool, ask the user for missing parameters.
 - If the user ask something using a relative date, use today date as reference.
 - Only tools defined in <tools></tools> XML tags are available for use, you musn't use any other tool.
+- Include an argument "user_query" while querying the tool. User query will be the user input that generated the tool call.
 - Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
 <tool_call>
 {"arguments": <args-dict>, "name": <function-name>}

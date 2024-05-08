@@ -39,6 +39,13 @@ func (o *OpenAI) processToolCall(toolCall string) (string, error) {
 	toolCall = strings.ReplaceAll(toolCall, "</tool_call>", "")
 	toolCall = strings.TrimSpace(toolCall)
 
+	// If contains ```json, remove it and the last ```
+	if strings.Contains(toolCall, "```json") {
+		toolCall = strings.ReplaceAll(toolCall, "```json", "")
+		toolCall = strings.TrimSpace(toolCall)
+		toolCall = strings.TrimSuffix(toolCall, "```")
+	}
+
 	// Replace ' by " to avoid json unmarshal error
 	toolCall = strings.ReplaceAll(toolCall, "'", "\"")
 
@@ -80,12 +87,21 @@ func (o *OpenAI) processToolCall(toolCall string) (string, error) {
 	case "string":
 		return toolResponse.Data, nil
 	case "prompt":
-		prompts := toolResponse.Prompts
+		processedPrompts := make([]string, 0)
 
-		prompts = append(prompts, fmt.Sprintf("user query: %s\n NOTE: Be concise, short and specific, some answer could be in a different language that user query, please translate it.", userQuery))
+		for _, prompt := range toolResponse.Prompts {
+			result, err := o.SendRequestWithnoMemory([]string{fmt.Sprintf("Please summarize and extract the key information from the following text: %s", prompt)})
+			if err != nil {
+				return "", err
+			}
 
-		log.Debugf("Tool prompts: %v", prompts)
-		result, err := o.SendRequestWithnoMemory(prompts)
+			processedPrompts = append(processedPrompts, result)
+		}
+
+		processedPrompts = append(processedPrompts, fmt.Sprintf("user query: %s\n NOTE: Be concise, short and specific", userQuery))
+
+		log.Debugf("Tool prompts: %v", processedPrompts)
+		result, err := o.SendRequestWithnoMemory(processedPrompts)
 
 		if err != nil {
 			return "", err
@@ -95,6 +111,31 @@ func (o *OpenAI) processToolCall(toolCall string) (string, error) {
 	}
 
 	return "", fmt.Errorf("unknown tool response type")
+}
+
+// SendRequestWithnoMemoryAndModel sends a request to the OpenAI without memory and with a specific model.
+func (o *OpenAI) SendRequestWithnoMemoryAndModel(prompts []string, model string) (string, error) {
+	messages := make([]openai.ChatCompletionMessage, 0)
+
+	for _, prompt := range prompts {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    "user",
+			Content: prompt,
+		})
+	}
+
+	req := openai.ChatCompletionRequest{
+		Model:    model,
+		Messages: messages,
+	}
+
+	resp, err := o.Client.CreateChatCompletion(context.Background(), req)
+
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Choices[0].Message.Content, nil
 }
 
 // SendRequestWithnoMemory sends a request to the OpenAI without memory.

@@ -33,8 +33,10 @@ func (c *Browser) Run(params map[string]interface{}, userQuery string) (*ToolRes
 		urlsToOpen = append(urlsToOpen, url)
 	}
 
+	searchFor := ""
 	// Handle search requests
 	if searchQuery, ok := params["search"].(string); ok {
+		searchFor = searchQuery
 		ddg := client.NewDuckDuckGoSearchClient()
 		searchResults, err := ddg.SearchLimited(searchQuery, MAX_RESULTS_DUCK_DUCK_GO)
 		if err != nil {
@@ -61,7 +63,7 @@ func (c *Browser) Run(params map[string]interface{}, userQuery string) (*ToolRes
 				resultCh <- ""
 				return
 			}
-			resultCh <- fmt.Sprintf("URL:%s\nDATA: %s\nNOTE: Ignore the cookie part", url, page)
+			resultCh <- fmt.Sprintf("URL:%s\nDATA: %s\nNOTE: Ignore the cookie part, while summarizing, include what user has search for %s", url, page, searchFor)
 		}(url)
 	}
 
