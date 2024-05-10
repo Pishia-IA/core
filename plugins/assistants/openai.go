@@ -92,7 +92,8 @@ func (o *OpenAI) processToolCall(toolCall string) (string, error) {
 		for _, prompt := range toolResponse.Prompts {
 			result, err := o.SendRequestWithnoMemory([]string{fmt.Sprintf("Please summarize and extract the key information from the following text: %s", prompt)})
 			if err != nil {
-				return "", err
+				log.Warnf("Error processing prompt: %s", err.Error())
+				continue
 			}
 
 			processedPrompts = append(processedPrompts, result)

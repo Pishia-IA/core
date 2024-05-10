@@ -88,24 +88,22 @@ func (o *Ollama) processToolCall(toolCall string) (string, error) {
 	case "string":
 		return toolResponse.Data, nil
 	case "prompt":
-		prompts := toolResponse.Prompts
+		processedPrompts := make([]string, 0)
 
-		processedPrompts := []string{}
-
-		for _, prompt := range prompts {
-			result, err := o.SendRequestWithnoMemory([]string{fmt.Sprintf("user query: %s\n\n prompt: %s\n\n NOTE: Be concise, short and specific, some answer could be in a different language that user query, please translate it.", userQuery, prompt)})
-
+		for _, prompt := range toolResponse.Prompts {
+			result, err := o.SendRequestWithnoMemory([]string{fmt.Sprintf("Please summarize and extract the key information from the following text: %s", prompt)})
 			if err != nil {
-				return "", err
+				log.Warnf("Error processing prompt: %s", err.Error())
+				continue
 			}
 
 			processedPrompts = append(processedPrompts, result)
 		}
 
-		prompts = append(processedPrompts, fmt.Sprintf("user query: %s. NOTE: Be concise, short and specific, some answer could be in a different language that user query, please translate it.", userQuery))
+		processedPrompts = append(processedPrompts, fmt.Sprintf("user query: %s\n NOTE: Be concise, short and specific", userQuery))
 
-		log.Debugf("Tool prompts: %v", prompts)
-		result, err := o.SendRequestWithnoMemory(prompts)
+		log.Debugf("Tool prompts: %v", processedPrompts)
+		result, err := o.SendRequestWithnoMemory(processedPrompts)
 
 		if err != nil {
 			return "", err
@@ -245,11 +243,11 @@ You are a function calling AI model. You are provided with function signatures w
 %s
 </tools>
 Instructions:
+- If you decide to use a function, you must only have to answer with the tool call,no extra information.
 - You only have to use a function, if use_case match with user query.
 - If you need more information for running a tool, ask the user for missing parameters.
 - If the user ask something using a relative date, use today date as reference.
 - Only tools defined in <tools></tools> XML tags are available for use, you musn't use any other tool.
-- Include an argument "user_query" while querying the tool. User query will be the user input that generated the tool call.
 - Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
 <tool_call>
 {"arguments": <args-dict>, "name": <function-name>}
