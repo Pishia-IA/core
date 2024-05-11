@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -176,4 +177,66 @@ func (c *OllamaClient) Chat(req *ChatRequest) (*ChatResponse, error) {
 	}
 
 	return &chatResp, nil
+}
+
+// ChunkResponse
+type ChunkResponse struct {
+	Model     string `json:"model"`
+	CreatedAt string `json:"created_at"`
+	Message   struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"message"`
+	Done bool `json:"done"`
+}
+
+// ChatStream
+func (c *OllamaClient) ChatStream(req *ChatRequest) (<-chan ChunkResponse, <-chan error, error) {
+	req.Stream = true // Force streaming
+
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resp, err := c.HTTPClient.Post(c.Endpoint+"/api/chat", "application/json", bytes.NewBuffer(reqJSON))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	messageChan := make(chan ChunkResponse, 10)
+	errorChan := make(chan error, 1)
+
+	go func() {
+		defer resp.Body.Close()
+		decoder := json.NewDecoder(resp.Body)
+		for {
+			var chunk ChunkResponse
+			if err := decoder.Decode(&chunk); err != nil {
+				if err == io.EOF {
+					close(messageChan)
+					break
+				} else {
+					errorChan <- err
+					close(messageChan)
+					close(errorChan)
+					return
+				}
+			}
+
+			messageChan <- chunk
+
+			if chunk.Done {
+				close(messageChan)
+				break
+			}
+		}
+	}()
+
+	return messageChan, errorChan, nil
 }

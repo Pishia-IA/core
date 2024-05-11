@@ -107,7 +107,7 @@ func (o *Ollama) processToolCall(toolCall string) (string, error) {
 			processedPrompts = append(processedPrompts, result)
 		}
 
-		processedPrompts = append(processedPrompts, fmt.Sprintf("user query: %s\n NOTE: Be concise, short and specific", userQuery))
+		processedPrompts = append(processedPrompts, fmt.Sprintf("user query: %s\n NOTE: Be concise, short and specific, and you must answer with the same language as the user query.", userQuery))
 
 		log.Debugf("Tool prompts: %v", processedPrompts)
 		result, err := o.SendRequestWithnoMemory(processedPrompts)
@@ -184,7 +184,7 @@ func (o *Ollama) SendRequest(input string, callback func(output string, err erro
 		Content: input,
 	})
 
-	resp, err := o.Client.Chat(&ollama.ChatRequest{
+	chanResp, chanErr, err := o.Client.ChatStream(&ollama.ChatRequest{
 		Model:    o.Model,
 		Messages: o.Chat,
 	})
@@ -194,11 +194,45 @@ func (o *Ollama) SendRequest(input string, callback func(output string, err erro
 		return nil
 	}
 
-	o.Chat = append(o.Chat, resp.Message)
+	toolMode := false
+	fullContent := ""
+	inProgress := true
 
-	if strings.Contains(resp.Message.Content, "<tool_call>") {
+	for inProgress {
+		select {
+		case resp := <-chanResp:
+			if resp.Done {
+				callback(resp.Message.Content+"\n", nil)
+				inProgress = false
+				continue
+			}
+
+			fullContent += resp.Message.Content
+
+			if len(resp.Message.Content) > 0 && resp.Message.Content[0] == '<' {
+				toolMode = true
+			}
+
+			if toolMode {
+				continue
+			}
+
+			callback(resp.Message.Content, nil)
+
+		case err := <-chanErr:
+			callback("", err)
+			return nil
+		}
+	}
+
+	o.Chat = append(o.Chat, ollama.Message{
+		Role:    "assistant",
+		Content: fullContent,
+	})
+
+	if toolMode && strings.Contains(fullContent, "<tool_call>") {
 		log.Debug("Tool call detected")
-		toolCall, err := o.processToolCall(resp.Message.Content)
+		toolCall, err := o.processToolCall(fullContent)
 
 		if err != nil {
 			o.Chat = o.Chat[:len(o.Chat)-1]
@@ -215,7 +249,6 @@ func (o *Ollama) SendRequest(input string, callback func(output string, err erro
 		return nil
 	}
 
-	callback(resp.Message.Content+"\n", nil)
 	return nil
 }
 
@@ -251,17 +284,19 @@ func (o *Ollama) Setup() error {
 		Role: "system",
 		Content: strings.TrimSpace(fmt.Sprintf(`Today date: %s
 Knowledge cutoff: 2023-12-31
-Your name is PishIA.
-You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools:
+You are a function calling AI model, your name is PishIA. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools:
 <tools>
 %s
 </tools>
 Instructions:
-- If you decide to use a function, you must only have to answer with the tool call,no extra information.
+- If you use a function, you must only have to answer with the tool call,no extra information.
+- In case of not using a function, you must answer with your knowledge.
+- Be sure to include all required parameters for the function.
 - You only have to use a function, if use_case match with user query.
 - If you need more information for running a tool, ask the user for missing parameters.
 - If the user ask something using a relative date, use today date as reference.
 - Only tools defined in <tools></tools> XML tags are available for use, you musn't use any other tool.
+- You must answer with the same language as the user query.
 - Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
 <tool_call>
 {"arguments": <args-dict>, "name": <function-name>}
