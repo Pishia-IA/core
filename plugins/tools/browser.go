@@ -113,12 +113,12 @@ func (c *Browser) Parameters() map[string]*ToolParameter {
 	return map[string]*ToolParameter{
 		"search": {
 			Type:        "string",
-			Description: "The query to search on Browser.",
+			Description: "The query to search on Browser, required if url is not provided.",
 			Required:    false,
 		},
 		"url": {
 			Type:        "string",
-			Description: "The URL to open on Browser.",
+			Description: "The URL to open on Browser, required if search is not provided.",
 			Required:    false,
 		},
 	}
@@ -132,5 +132,6 @@ func (c *Browser) UseCase() []string {
 		"User is asking about an event that happened recently",
 		"User is asking about an event that is happening in the future",
 		"User send a URL and ask for a summary of the page",
+		"User is asking for an information that you don't have access to this information",
 	}
 }

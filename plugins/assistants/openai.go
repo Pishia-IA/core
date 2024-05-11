@@ -77,6 +77,14 @@ func (o *OpenAI) processToolCall(toolCall string) (string, error) {
 	}
 
 	userQuery := o.Chat[len(o.Chat)-2].Content
+
+	// Check if origin_query is present in the arguments
+	searchQuery, ok := toolArguments["search"].(string)
+
+	if ok {
+		userQuery = searchQuery
+	}
+
 	toolResponse, err := tool.Run(toolArguments, userQuery)
 
 	if err != nil {
@@ -87,19 +95,29 @@ func (o *OpenAI) processToolCall(toolCall string) (string, error) {
 	case "string":
 		return toolResponse.Data, nil
 	case "prompt":
-		processedPrompts := make([]string, 0)
+		processedPrompts := make([]string, len(toolResponse.Prompts))
+		errChan := make(chan error, len(toolResponse.Prompts))
 
-		for _, prompt := range toolResponse.Prompts {
-			result, err := o.SendRequestWithnoMemory([]string{fmt.Sprintf("Please summarize and extract the key information from the following text: %s", prompt)})
-			if err != nil {
-				log.Warnf("Error processing prompt: %s", err.Error())
-				continue
-			}
-
-			processedPrompts = append(processedPrompts, result)
+		for i, prompt := range toolResponse.Prompts {
+			go func(i int, prompt string) {
+				result, err := o.SendRequestWithnoMemory([]string{fmt.Sprintf("Please summarize and extract the key information from the following text: %s", prompt)})
+				if err != nil {
+					errChan <- err
+					return
+				}
+				processedPrompts[i] = result
+				errChan <- nil
+			}(i, prompt)
 		}
 
-		processedPrompts = append(processedPrompts, fmt.Sprintf("user query: %s\n NOTE: Be concise, short and specific", userQuery))
+		for range toolResponse.Prompts {
+			err := <-errChan
+			if err != nil {
+				log.Warnf("Error processing prompt: %s", err.Error())
+			}
+		}
+
+		processedPrompts = append(processedPrompts, fmt.Sprintf("user query: %s\n NOTE: Be concise, short and specific, and you must answer with the same language as the user query.", userQuery))
 
 		log.Debugf("Tool prompts: %v", processedPrompts)
 		result, err := o.SendRequestWithnoMemory(processedPrompts)
@@ -224,10 +242,12 @@ func (o *OpenAI) Setup() error {
 		</tools>
 		Instructions:
 		- If you use a function, you must only have to answer with the tool call,no extra information.
+		- Be sure to include all required parameters for the function.
 		- You only have to use a function, if use_case match with user query.
 		- If you need more information for running a tool, ask the user for missing parameters.
 		- If the user ask something using a relative date, use today date as reference.
 		- Only tools defined in <tools></tools> XML tags are available for use, you musn't use any other tool.
+		- You must answer with the same language as the user query.
 		- Use the following pydantic model json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"} For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
 		<tool_call>
 		{"arguments": <args-dict>, "name": <function-name>}

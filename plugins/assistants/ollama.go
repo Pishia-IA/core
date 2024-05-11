@@ -78,6 +78,13 @@ func (o *Ollama) processToolCall(toolCall string) (string, error) {
 	}
 
 	userQuery := o.Chat[len(o.Chat)-2].Content
+	// Check if origin_query is present in the arguments
+	searchQuery, ok := toolArguments["search"].(string)
+
+	if ok {
+		userQuery = searchQuery
+	}
+
 	toolResponse, err := tool.Run(toolArguments, userQuery)
 
 	if err != nil {
