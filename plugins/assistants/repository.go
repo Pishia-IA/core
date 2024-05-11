@@ -11,7 +11,7 @@ var (
 
 type Assistant interface {
 	// SendRequest is a method that allows the assistant to chat with you.
-	SendRequest(input string) (string, error)
+	SendRequest(input string, callback func(output string, err error)) error
 	// Setup sets up the assistant, if something is needed before starting the assistant.
 	Setup() error
 }

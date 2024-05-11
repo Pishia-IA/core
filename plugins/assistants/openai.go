@@ -3,7 +3,9 @@ package assistants
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -183,7 +185,7 @@ func (o *OpenAI) SendRequestWithnoMemory(prompts []string) (string, error) {
 }
 
 // SendRequest sends a request to the OpenAI.
-func (o *OpenAI) SendRequest(prompt string) (string, error) {
+func (o *OpenAI) SendRequest(prompt string, callback func(output string, err error)) error {
 	o.Chat = append(o.Chat, openai.ChatCompletionMessage{
 		Role:    "user",
 		Content: prompt,
@@ -194,32 +196,67 @@ func (o *OpenAI) SendRequest(prompt string) (string, error) {
 		Messages: o.Chat,
 	}
 
-	resp, err := o.Client.CreateChatCompletion(context.Background(), req)
+	stream, err := o.Client.CreateChatCompletionStream(context.Background(), req)
 
 	if err != nil {
-		return "", err
+		callback("", err)
+		return nil
 	}
 
-	o.Chat = append(o.Chat, resp.Choices[0].Message)
+	defer stream.Close()
 
-	if strings.Contains(resp.Choices[0].Message.Content, "<tool_call>") {
+	fullContent := ""
+	toolMode := false
+
+	for {
+		response, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			callback("", err)
+			return nil
+		}
+
+		if len(response.Choices) > 0 && len(response.Choices[0].Delta.Content) > 0 && response.Choices[0].Delta.Content[0] == '<' {
+			toolMode = true
+		}
+
+		fullContent += response.Choices[0].Delta.Content
+
+		if toolMode {
+			continue
+		}
+
+		callback(response.Choices[0].Delta.Content, nil)
+	}
+
+	o.Chat = append(o.Chat, openai.ChatCompletionMessage{
+		Role:    "assistant",
+		Content: fullContent,
+	})
+
+	if toolMode && strings.Contains(fullContent, "<tool_call>") {
 		log.Debug("Tool call detected")
-		toolCall, err := o.processToolCall(resp.Choices[0].Message.Content)
+		toolCall, err := o.processToolCall(fullContent)
 
 		if err != nil {
 			o.Chat = o.Chat[:len(o.Chat)-1]
-			return "", err
+			callback("", err)
+			return nil
 		}
 
 		o.Chat = append(o.Chat, openai.ChatCompletionMessage{
-			Role:    "system",
+			Role:    "assistant",
 			Content: toolCall,
 		})
 
-		return toolCall, nil
+		callback(toolCall+"\n", nil)
+		return nil
 	}
 
-	return resp.Choices[0].Message.Content, nil
+	return nil
 }
 
 // Setup sets up the OpenAI assistant.
@@ -235,13 +272,13 @@ func (o *OpenAI) Setup() error {
 	o.Chat = append(o.Chat, openai.ChatCompletionMessage{
 		Role: "system",
 		Content: strings.TrimSpace(fmt.Sprintf(`Today date: %s
-		Your name is PishIA.
-		You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools:
+		You are a function calling AI model, your name is PishIA. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools:
 		<tools>
 		%s
 		</tools>
 		Instructions:
 		- If you use a function, you must only have to answer with the tool call,no extra information.
+		- In case of not using a function, you must answer with your knowledge.
 		- Be sure to include all required parameters for the function.
 		- You only have to use a function, if use_case match with user query.
 		- If you need more information for running a tool, ask the user for missing parameters.

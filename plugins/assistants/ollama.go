@@ -174,7 +174,10 @@ func (o *Ollama) SendRequestWithNoMemoryCustomModel(input string, model string) 
 }
 
 // SendRequest is a method that allows the Ollama to chat with you.
-func (o *Ollama) SendRequest(input string) (string, error) {
+func (o *Ollama) SendRequest(input string, callback func(output string, err error)) error {
+	if callback == nil {
+		return fmt.Errorf("callback is nil")
+	}
 
 	o.Chat = append(o.Chat, ollama.Message{
 		Role:    "user",
@@ -187,7 +190,8 @@ func (o *Ollama) SendRequest(input string) (string, error) {
 	})
 
 	if err != nil {
-		return "", err
+		callback("", err)
+		return nil
 	}
 
 	o.Chat = append(o.Chat, resp.Message)
@@ -198,7 +202,8 @@ func (o *Ollama) SendRequest(input string) (string, error) {
 
 		if err != nil {
 			o.Chat = o.Chat[:len(o.Chat)-1]
-			return "", err
+			callback("", err)
+			return nil
 		}
 
 		o.Chat = append(o.Chat, ollama.Message{
@@ -206,10 +211,12 @@ func (o *Ollama) SendRequest(input string) (string, error) {
 			Content: toolCall,
 		})
 
-		return toolCall, nil
+		callback(toolCall+"\n", nil)
+		return nil
 	}
 
-	return resp.Message.Content, nil
+	callback(resp.Message.Content+"\n", nil)
+	return nil
 }
 
 // Setup sets up the Ollama, if something is needed before starting the Ollama.

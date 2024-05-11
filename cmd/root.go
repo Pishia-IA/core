@@ -66,19 +66,30 @@ var cliCmd = &cobra.Command{
 			var n newline
 			fmt.Scan(&n)
 
+			cmd.Print("Pishia: ")
+
 			if err != nil {
 				cmd.Println("Error reading input:", err)
 				return
 			}
 
-			response, err := assistant.SendRequest(n.tok)
+			printResponse := func(output string, err error) {
+				if err != nil {
+					cmd.Println("Error sending request:", err)
+					return
+				}
+
+				cmd.Print(output)
+			}
+
+			err := assistant.SendRequest(n.tok, printResponse)
 
 			if err != nil {
 				cmd.Println("Error sending request:", err)
-				continue
+				return
 			}
 
-			cmd.Println("Ollama:", response)
+			cmd.Println()
 		}
 
 	},
