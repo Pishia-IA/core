@@ -114,8 +114,8 @@ func GetRepository() *ToolRepository {
 func StartTools(config *config.Base) {
 	repository = NewToolRepository()
 
-	// repository.Register("weather", NewWeather(config))
 	repository.Register("browser", NewBrowser(config))
+	repository.Register("reservation", NewReservation(config))
 
 	switch runtime.GOOS {
 	case "darwin":

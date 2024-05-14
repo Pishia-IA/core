@@ -53,7 +53,7 @@ func CreateDefaultConfig() error {
 				Endpoint: "http://localhost:11434",
 			},
 			OpenAI: OpenAI{
-				Model:    "gpt-3.5-turbo",
+				Model:    "gpt-4o",
 				APIKey:   "<api_key>",
 				Endpoint: "https://api.openai.com/v1/",
 			},

@@ -126,12 +126,14 @@ func (c *Browser) Parameters() map[string]*ToolParameter {
 
 func (c *Browser) UseCase() []string {
 	return []string{
-		"User is asking about current events or something that requires real-time information (news, weather, sports scores, etc.)",
-		"User is asking about some term you are totally unfamiliar with (it might be new)",
-		"User explicitly asks you to browse or provide links to references",
-		"User is asking about an event that happened recently",
-		"User is asking about an event that is happening in the future",
-		"User send a URL and ask for a summary of the page",
-		"User is asking for an information that you don't have access to this information",
+		"User requests information on current or real-time events, such as news updates, weather conditions, or sports scores.",
+		"User inquires about a term or concept that may be new or unfamiliar.",
+		"User explicitly requests browsing for specific information or asks for reference links.",
+		"User seeks details about a recent event.",
+		"User queries about an event scheduled to occur in the future.",
+		"User provides a URL and requests a summary or specific details from the web page.",
+		"User asks for information that is outside the scope of your current data or knowledge base.",
+		"User asks for a phone number, address, or other contact information for a business or organization.",
+		"User requests to search information on internet.",
 	}
 }
